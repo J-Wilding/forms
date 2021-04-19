@@ -1,0 +1,20 @@
+{
+  "name": "isee_api",
+  "version": "1.0.0",
+  "description": "api for collecting isee data in a backend database",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Jonathan Wilding",
+  "license": "ISC",
+  "dependencies": {
+    "argon2": "^0.27.2",
+    "async": "^3.2.0",
+    "cookie-parser": "^1.4.5",
+    "cookie-session": "^1.4.0",
+    "express": "^4.17.1",
+    "mongoose": "^5.12.1",
+    "readline-sync": "^1.4.10"
+  }
+}
