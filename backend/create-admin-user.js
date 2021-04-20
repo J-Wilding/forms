@@ -4,7 +4,7 @@ const users = require("./users.js");
 
 const User = users.model;
 
-mongoose.connect("mongodb://localhost:27017/explore_info_sys", {
+mongoose.connect("mongodb://localhost:27017/forms", {
   useUnifiedTopology: true,
   useNewUrlParser: true,
 });

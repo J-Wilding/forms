@@ -27,21 +27,19 @@ app.use(
   })
 );
 
-
-mongoose.connect("mongodb://localhost:27017/explore_info_sys", {
+mongoose.connect("mongodb://localhost:27017/forms", {
   useNewUrlParser: true,
   useUnifiedTopology: true,
-  useCreateIndex: true,
+  // useCreateIndex: true,
 });
 
 // Task Schema
 const taskSchema = new mongoose.Schema({
-  name: {
-    type: String,
-    unique: true,
-    required: true,
-    dropDups: true,
+  user: {
+    type: mongoose.Schema.ObjectId,
+    ref: "User",
   },
+  name: String,
 });
 
 const Task = mongoose.model("Task", taskSchema);
@@ -64,32 +62,32 @@ const questionSchema = new mongoose.Schema({
 
 const Question = mongoose.model("Question", questionSchema);
 
-// each of these sub-tasks are associated with a meta-task
-const dataEntrySchema = new mongoose.Schema({
-  task: {
-    type: mongoose.Schema.ObjectId,
-    ref: "Task",
-  },
-  id: Number,
-  first_name: String,
-  last_name: String,
-  job: String,
-  department: String,
-  address: String,
-  city: String,
-  state: String,
-  zip_code: Number,
-});
+// // each of these sub-tasks are associated with a meta-task
+// const dataEntrySchema = new mongoose.Schema({
+//   task: {
+//     type: mongoose.Schema.ObjectId,
+//     ref: "Task",
+//   },
+//   id: Number,
+//   first_name: String,
+//   last_name: String,
+//   job: String,
+//   department: String,
+//   address: String,
+//   city: String,
+//   state: String,
+//   zip_code: Number,
+// });
 
-const imageSearchSchema = new mongoose.Schema({
-  task: {
-    type: mongoose.Schema.ObjectId,
-    ref: "Task",
-  },
-  imageNumber: Number,
-  imageOrientation: String,
-  hasContraband: Boolean,
-});
+// const imageSearchSchema = new mongoose.Schema({
+//   task: {
+//     type: mongoose.Schema.ObjectId,
+//     ref: "Task",
+//   },
+//   imageNumber: Number,
+//   imageOrientation: String,
+//   hasContraband: Boolean,
+// });
 
 const surveyResponseSchema = new mongoose.Schema({
   question: {
@@ -101,8 +99,8 @@ const surveyResponseSchema = new mongoose.Schema({
 });
 
 const participantDataSchema = new mongoose.Schema({
-  dataEntries: [dataEntrySchema],
-  imageSearches: [imageSearchSchema],
+  // dataEntries: [dataEntrySchema],
+  // imageSearches: [imageSearchSchema],
   surveyAnswers: [surveyResponseSchema],
   participantId: String,
 });
@@ -112,17 +110,15 @@ const ParticipantData = mongoose.model(
   participantDataSchema
 );
 
-
 app.use("/api/users", users.routes);
 const User = users.model;
 const validUser = users.valid;
-
-
 
 // API endpoint for creating tasks
 app.post("/api/tasks", validUser, async (req, res) => {
   const task = new Task({
     name: req.body.name,
+    user: req.body.user,
   });
   console.log(task);
   try {
@@ -135,12 +131,17 @@ app.post("/api/tasks", validUser, async (req, res) => {
 });
 
 // Endpoint for getting all tasks
-app.get("/api/tasks", async (req, res) => {
+app.get("/api/tasks", validUser, async (req, res) => {
+  let tasks = [];
   try {
-    let tasks = await Task.find();
+    if (req.user.role === "admin") {
+      tasks = await Task.find().populate("user");
+    } else {
+      tasks = await Task.find({ user: req.user });
+    }
     res.send(tasks);
   } catch (error) {
-    console.lot(error);
+    console.log(error);
     res.sendStatus(500);
   }
 });
@@ -179,19 +180,22 @@ app.delete("/api/tasks/:taskId", validUser, async (req, res) => {
 });
 
 // Endpoint for single task functions. Get task from taskName
-app.get("/api/task/:name", async (req, res) => {
-  let task = await Task.findOne({ name: req.params.name });
-  if (!task) {
-    res.sendStatus(404);
-    return;
-  }
-  res.send(task);
-});
+// app.get("/api/task/:name", async (req, res) => {
+//   let task = await Task.findOne({ name: req.params.name });
+//   if (!task) {
+//     res.sendStatus(404);
+//     return;
+//   }
+//   res.send(task);
+// });
 
+
+
+// Question Endpoints
 // Add Question
-app.post("/api/survey/:name/question", validUser, async (req, res) => {
+app.post("/api/survey/:id/question", validUser, async (req, res) => {
   try {
-    let task = await Task.findOne({ name: req.params.name });
+    let task = await Task.findOne({ _id: req.params.id });
     if (!task) {
       res.sendStatus(404);
       console.log(task);
@@ -211,9 +215,9 @@ app.post("/api/survey/:name/question", validUser, async (req, res) => {
 });
 
 // get questions
-app.get("/api/survey/:name/questions", async (req, res) => {
+app.get("/api/survey/:id/questions", async (req, res) => {
   try {
-    let task = await Task.findOne({ name: req.params.name });
+    let task = await Task.findOne({ _id: req.params.id });
     if (!task) {
       res.status(404).send("No survey with that id");
       return;
@@ -228,6 +232,25 @@ app.get("/api/survey/:name/questions", async (req, res) => {
   }
 });
 
+// edit question
+app.put("/api/survey/question/:questionId", validUser, async (req, res) => {
+  try {
+    let question = await Question.findOne({ _id: req.params.questionId });
+    if (!question) {
+      res.sendStatus(404);
+      return;
+    }
+    question.question = req.body.question;
+    question.answers = req.body.answers;
+    await question.save();
+    res.status(200).send(question);
+  } catch (error) {
+    console.log(error);
+    res.sendStatus(500);
+  }
+});
+
+// Delete Question
 app.delete("/api/survey/question/:questionId", validUser, async (req, res) => {
   try {
     console.log(req.params.questionId);
@@ -243,8 +266,10 @@ app.delete("/api/survey/question/:questionId", validUser, async (req, res) => {
   }
 });
 
+// Delete Answer
 app.delete(
-  "/api/survey/question/:questionId/answer/:answerNum", validUser,
+  "/api/survey/question/:questionId/answer/:answerNum",
+  validUser,
   async (req, res) => {
     try {
       console.log(req.params.questionId);
@@ -265,23 +290,6 @@ app.delete(
   }
 );
 
-// edit question
-app.put("/api/survey/question/:questionId", validUser, async (req, res) => {
-  try {
-    let question = await Question.findOne({ _id: req.params.questionId });
-    if (!question) {
-      res.sendStatus(404);
-      return;
-    }
-    question.question = req.body.question;
-    question.answers = req.body.answers;
-    await question.save();
-    res.status(200).send(question);
-  } catch (error) {
-    console.log(error);
-    res.sendStatus(500);
-  }
-});
 
 /**********
  * participant data endpoints
@@ -299,6 +307,7 @@ app.post("/api/data", async (req, res) => {
   }
 });
 
+// For user testing survey link 
 app.get("/api/user/test", async (req, res) => {
   try {
     let user = await ParticipantData.findOne({ participantId: "test" });
@@ -317,22 +326,22 @@ app.get("/api/user/test", async (req, res) => {
   }
 });
 
-app.put("/api/:id/taskData", async (req, res) => {
-  try {
-    let user = await ParticipantData.findOne({ _id: req.params.id });
-    if (!user) {
-      res.sendStatus(404);
-      return;
-    }
-    user.dataEntries = req.body.dataEntries;
-    user.imageSearches = req.body.imageSearches;
-    await user.save();
-    res.status(200).send(user);
-  } catch (error) {
-    console.log(error);
-    res.sendStatus(500);
-  }
-});
+// app.put("/api/:id/taskData", async (req, res) => {
+//   try {
+//     let user = await ParticipantData.findOne({ _id: req.params.id });
+//     if (!user) {
+//       res.sendStatus(404);
+//       return;
+//     }
+//     user.dataEntries = req.body.dataEntries;
+//     user.imageSearches = req.body.imageSearches;
+//     await user.save();
+//     res.status(200).send(user);
+//   } catch (error) {
+//     console.log(error);
+//     res.sendStatus(500);
+//   }
+// });
 
 app.put("/api/data/:participantId/surveyAnswers", async (req, res) => {
   if (req.params.participantId === "undefined") {
@@ -355,4 +364,4 @@ app.put("/api/data/:participantId/surveyAnswers", async (req, res) => {
   }
 });
 
-app.listen(3000, () => console.log("Server listening on port 3000!"));
+app.listen(3030, () => console.log("Server listening on port 3030!"));
